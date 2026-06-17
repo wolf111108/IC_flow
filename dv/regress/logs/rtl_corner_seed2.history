@@ -1,0 +1,1 @@
+s1(17Jun2026:22:58:30):  xrun -64bit -sv -access +rwc -timescale 1ns/1ps +define+DUMP_VCD +TEST_NAME=corner +SEED=2 +DUMPFILE=dv/regress/waves/rtl_corner_seed2.vcd -xmlibdirname dv/work/xcelium_regress_corner_2.d -f dv/filelists/tb.f -top tb_bit_serial_mac -l dv/regress/logs/rtl_corner_seed2.log 

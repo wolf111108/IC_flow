@@ -1,0 +1,9 @@
+# ============================================================
+# RDC constraints for bit_serial_mac_unsigned
+# ============================================================
+
+current_design bit_serial_mac_unsigned
+
+clock -name clk -domain clk_domain
+
+reset -name rst_n -value 0

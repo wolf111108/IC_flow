@@ -1,0 +1,1 @@
+s1(17Jun2026:22:58:34):  xrun -64bit -sv -access +rwc -timescale 1ns/1ps +define+DUMP_VCD +TEST_NAME=random +SEED=3 +DUMPFILE=dv/regress/waves/rtl_random_seed3.vcd -xmlibdirname dv/work/xcelium_regress_random_3.d -f dv/filelists/tb.f -top tb_bit_serial_mac -l dv/regress/logs/rtl_random_seed3.log 
