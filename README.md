@@ -2,7 +2,7 @@
 
 ## 1. 项目简介
 
-本项目是一个可复用的数字 IC 前端参考流程项目，示例设计为无符号 bit-serial MAC：`bit_serial_mac_unsigned`。项目目标是把一个小型 RTL 设计从 coding 开始，串起 RTL 仿真、RTL regression、Lint、CDC、RDC、Design Compiler 综合、Formality 等价检查、PrimeTime STA、零延迟 GLS、SDF GLS 等步骤，形成一个可以迁移到其他数字前端项目的 flow 模板。
+本项目是一个可复用的数字 IC 前端参考流程项目，目前包含两个示例设计：无符号 bit-serial MAC `bit_serial_mac_unsigned`，以及基于 DesignWare 的浮点乘法流水线 `dw_fp_mult_pipe`（默认设计，可通过 `DESIGN` 变量切换，见下文“多设计支持”）。项目目标是把一个 RTL 设计从 coding 开始，串起 RTL 仿真、RTL regression、Lint、CDC、RDC、Design Compiler 综合、Formality 等价检查、PrimeTime STA、零延迟 GLS、SDF GLS 等步骤，形成一个可以迁移到其他数字前端项目的 flow 模板。
 
 示例 DUT 功能为：输入操作数 `A` 以 bit-serial 方式逐位输入，权重 `W` 以 parallel 方式输入，最终输出：
 
@@ -18,7 +18,55 @@ W_WIDTH   = 8
 ACC_WIDTH = 32
 ```
 
-本项目重点不在于 MAC 本身的复杂度，而在于把数字前端常见流程组织成一套清晰、可扩展、可检查、可复用的目录和 Makefile target。
+本项目重点不在于设计本身的复杂度，而在于把数字前端常见流程组织成一套清晰、可扩展、可检查、可复用的目录和 Makefile target。
+
+### 多设计支持
+
+项目支持通过 `DESIGN` 变量在多个设计之间切换，每个设计一个独立配置文件 `config/designs/<name>.mk`，当前包含：
+
+```text
+config/designs/bit_serial_mac.mk   # bit-serial MAC（无符号定点）
+config/designs/dw_fp_mac.mk        # 基于 DesignWare DW_fp_mult 的流水线浮点乘法（默认）
+```
+
+切换设计：
+
+```bash
+make DESIGN=bit_serial_mac rtl     # 跑 bit-serial MAC 的 RTL 仿真
+make DESIGN=dw_fp_mac fe           # 跑 dw_fp_mac 的完整前端 flow（默认）
+```
+
+默认设计由 `config/project.mk` 中的 `DESIGN ?= dw_fp_mac` 决定，若对应的 `config/designs/$(DESIGN).mk` 不存在，Makefile 会直接报错。
+
+`dw_fp_mac` 设计简介：
+
+```text
+RTL     : rtl/top/dw_fp_mac_pipe.v（顶层 dw_fp_mult_pipe，内部例化 DesignWare DW_fp_mult）
+TB      : dv/tb/tb_dw_fp_mac_pipe.v
+filelist: dv/filelists/rtl_dw_fp_mac.f、dv/filelists/tb_dw_fp_mac.f
+约束    : constraints/dw_fp_mac/top.sdc（clk period 9ns）
+```
+
+### DesignWare 支持
+
+当设计 profile 中 `USE_DW := 1` 时：
+
+```text
+1. RTL 仿真：xrun 自动加 -y $(DW_SIM_DIR) +libext+.v+.sv+.inc +incdir+$(DW_SIM_DIR)，
+   从 DesignWare 仿真模型目录解析 DW_fp_mult 等 DW 实例
+2. DC 综合：run_dc.tcl 自动 link DW synthetic library（dw_foundation.sldb），
+   使 DW 实例被正确综合
+```
+
+DW 相关路径集中在 `config/tools.mk`：
+
+```makefile
+DC_ROOT ?= /NAS/cad/synopsys/syn/Q-2019.12-SP5-5
+DW_ROOT ?= $(DC_ROOT)/dw
+DW_SIM_DIR ?= $(DW_ROOT)/sim_ver
+DW_SYN_LIB_DIR ?= $(DC_ROOT)/libraries/syn
+DW_SYNTHETIC_LIB ?= dw_foundation.sldb
+```
 
 ---
 
@@ -28,24 +76,30 @@ ACC_WIDTH = 32
 IC_flow/
 ├── Makefile                         # 顶层 flow 入口，定义 rtl/lint/cdc/rdc/syn/lec/sta/gls/gls_sdf 等 target
 ├── config/
-│   ├── project.mk                    # 项目级配置：TOP、TB、filelist、综合网表/SDC/SDF 路径
-│   ├── tools.mk                      # 工具、module、PDK、标准单元库配置
+│   ├── project.mk                    # 通用配置：DESIGN 选择、综合网表/SDC/SDF 通用路径
+│   ├── tools.mk                      # 工具、module、PDK、标准单元库、DesignWare 配置
+│   ├── designs/                      # 每个设计一个 profile：bit_serial_mac.mk、dw_fp_mac.mk
 │   └── pdk/                          # 预留 PDK 配置脚本
 ├── rtl/
 │   └── top/
-│       └── bit_serial_mac_unsigned.v # 示例 RTL DUT
+│       ├── bit_serial_mac_unsigned.v # 示例 RTL DUT（bit-serial MAC）
+│       └── dw_fp_mac_pipe.v          # DesignWare 浮点乘法流水线 DUT（默认设计）
 ├── dv/
 │   ├── tb/
-│   │   └── tb_bit_serial_mac.v       # RTL/GLS 共用 testbench
+│   │   ├── tb_bit_serial_mac.v       # RTL/GLS 共用 testbench
+│   │   └── tb_dw_fp_mac_pipe.v       # dw_fp_mac testbench
 │   ├── filelists/
-│   │   ├── rtl.f                     # RTL 文件列表
-│   │   ├── tb.f                      # RTL 仿真文件列表
+│   │   ├── rtl.f                     # RTL 文件列表（bit_serial_mac）
+│   │   ├── tb.f                      # RTL 仿真文件列表（bit_serial_mac）
+│   │   ├── rtl_dw_fp_mac.f           # RTL 文件列表（dw_fp_mac）
+│   │   ├── tb_dw_fp_mac.f            # RTL 仿真文件列表（dw_fp_mac）
 │   │   └── gate.f                    # GLS 文件列表，由 make gen_gate_f 自动生成
 │   ├── logs/                         # RTL 单次仿真日志
 │   ├── work/                         # Xcelium 编译工作目录
 │   └── regress/                      # RTL regression 日志和波形
 ├── constraints/
-│   ├── top.sdc                       # 顶层 SDC，统一 source 其他 SDC 文件
+│   ├── top.sdc                       # bit_serial_mac 顶层 SDC，统一 source 其他 SDC 文件
+│   ├── dw_fp_mac/top.sdc             # dw_fp_mac 顶层 SDC
 │   ├── clock.sdc                     # 时钟约束
 │   ├── io.sdc                        # 输入/输出 delay 和 load
 │   ├── reset.sdc                     # reset false path
@@ -128,6 +182,14 @@ ln -sf /usr/lib64/libmng.so.2.0.2 ~/compat_lib/libmng.so.1
 ```bash
 make help
 ```
+
+### 4.1.1 DesignWare 配置检查
+
+```bash
+make check_dw
+```
+
+检查 `USE_DW`、`DW_SIM_DIR`、`DW_SYNTHETIC_LIB` 等配置；当 `USE_DW=1` 时会验证 DW 仿真目录和 synthetic library 是否存在，不存在则报错退出。`make rtl` 和 `make syn` 已自动前置该检查。
 
 ### 4.2 单步 flow
 
@@ -1138,28 +1200,47 @@ hold corner : fast / min delay
 
 ## 9. 复用到其他项目时需要修改的地方
 
-### 9.1 修改项目名称和顶层
+### 9.1 添加新设计
+
+现在推荐通过新增设计 profile 的方式接入新设计，而不是直接修改 `project.mk`。
 
 文件：
 
 ```text
-config/project.mk
+config/designs/<new_design>.mk
 ```
 
-需要修改：
+新增一个 profile，例如：
 
 ```makefile
 TOP_DESIGN := your_top
 TB_TOP     := your_tb_top
+
+RTL_LIST  := $(PROJECT_ROOT)/dv/filelists/rtl_your_top.f
+TB_LIST   := $(PROJECT_ROOT)/dv/filelists/tb_your_top.f
+GATE_LIST := $(PROJECT_ROOT)/dv/filelists/gate_your_top.f
+
+TB_FILE  := $(PROJECT_ROOT)/dv/tb/your_tb_top.v
+SDC_FILE := $(PROJECT_ROOT)/constraints/your_top/top.sdc
+
+USE_DW := 0   # 若使用 DesignWare 则设为 1
 ```
 
-以及输出路径通常可以保留：
+然后运行：
+
+```bash
+make DESIGN=your_top fe
+```
+
+通用输出路径由 `config/project.mk` 自动派生，无需逐个修改：
 
 ```makefile
-SYN_NETLIST := $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.v
-SYN_SDC     := $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.sdc
-SYN_SDF     := $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.sdf
+SYN_NETLIST = $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.v
+SYN_SDC     = $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.sdc
+SYN_SDF     = $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.sdf
 ```
+
+若要把新设计设为默认，修改 `project.mk` 中 `DESIGN ?= your_top` 即可。
 
 ---
 
@@ -1168,8 +1249,8 @@ SYN_SDF     := $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.sdf
 文件：
 
 ```text
-dv/filelists/rtl.f
-dv/filelists/tb.f
+dv/filelists/rtl_<design>.f
+dv/filelists/tb_<design>.f
 ```
 
 例如：
@@ -1180,7 +1261,7 @@ rtl/core/xxx.v
 rtl/common/yyy.v
 ```
 
-`tb.f` 应包含 testbench 和 RTL：
+`tb_<design>.f` 应包含 testbench 和 RTL：
 
 ```text
 dv/tb/your_tb_top.sv
@@ -1459,6 +1540,7 @@ make verdi_gls_sdf
 ```csh
 cd IC_flow
 source scripts/env.csh
+make check_dw
 make rtl
 make regression
 make lint
@@ -1469,6 +1551,13 @@ make lec
 make sta
 make gls
 make gls_sdf
+```
+
+切换设计示例：
+
+```bash
+make DESIGN=bit_serial_mac fe   # 跑 bit-serial MAC 完整 flow
+make fe                          # 默认跑 dw_fp_mac 完整 flow
 ```
 
 常规完整流程：
