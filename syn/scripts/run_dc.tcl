@@ -18,6 +18,11 @@ proc make_abs {path root} {
     }
 }
 
+set USE_DW           [get_env_or USE_DW "0"]
+set DW_ROOT          [get_env_or DW_ROOT ""]
+set DW_SYN_LIB_DIR   [get_env_or DW_SYN_LIB_DIR ""]
+set DW_SYNTHETIC_LIB [get_env_or DW_SYNTHETIC_LIB "dw_foundation.sldb"]
+
 set PROJECT_ROOT [get_env_or PROJECT_ROOT [file normalize "../.."]]
 set TOP_DESIGN   [get_env_or TOP_DESIGN "bit_serial_mac_unsigned"]
 set TARGET_LIB   [get_env_or DC_TARGET_LIB ""]
@@ -44,8 +49,51 @@ set_svf "$WORK_DIR/${TOP_DESIGN}.svf"
 # Library setup
 # ------------------------------------------------------------
 set_app_var target_library [list $TARGET_LIB]
-set_app_var link_library   [list "*" $TARGET_LIB]
-set_app_var search_path    [list $PROJECT_ROOT]
+
+if {$USE_DW eq "1"} {
+    puts "DesignWare support enabled"
+    puts "DW_ROOT          = $DW_ROOT"
+    puts "DW_SYN_LIB_DIR   = $DW_SYN_LIB_DIR"
+    puts "DW_SYNTHETIC_LIB = $DW_SYNTHETIC_LIB"
+
+    if {![file isdirectory $DW_ROOT]} {
+        error "DW_ROOT not found: $DW_ROOT"
+    }
+
+    if {![file isdirectory $DW_SYN_LIB_DIR]} {
+        error "DW_SYN_LIB_DIR not found: $DW_SYN_LIB_DIR"
+    }
+
+    set dw_sldb [file join $DW_SYN_LIB_DIR $DW_SYNTHETIC_LIB]
+
+    if {![file exists $dw_sldb]} {
+        error "DesignWare synthetic library not found: $dw_sldb"
+    }
+
+    # Set DesignWare root (Tcl variable, not app_var)
+    # Works across all DC versions: set is core Tcl
+    # Do NOT use set_app_var — hdlin_dwroot is not a registered app var
+    set hdlin_dwroot $DW_ROOT
+    set_app_var synthetic_library [list $DW_SYNTHETIC_LIB]
+
+    set_app_var search_path [
+        list \
+            $PROJECT_ROOT \
+            $DW_SYN_LIB_DIR
+    ]
+
+    set_app_var link_library [
+        list \
+            "*" \
+            $TARGET_LIB \
+            $DW_SYNTHETIC_LIB
+    ]
+} else {
+    puts "DesignWare support disabled"
+
+    set_app_var search_path [list $PROJECT_ROOT]
+    set_app_var link_library [list "*" $TARGET_LIB]
+}
 
 # ------------------------------------------------------------
 # Read RTL filelist
@@ -92,8 +140,11 @@ define_design_lib WORK -path "$WORK_DIR/dc_work"
 
 analyze -library WORK -format verilog $rtl_files
 elaborate $TOP_DESIGN -library WORK
-current_design $TOP_DESIGN
 link
+current_design $TOP_DESIGN
+
+# report DesignWare / resource usage
+report_resources > "$REPORT_DIR/designware_pre_compile.rpt"
 
 check_design > "$REPORT_DIR/check_design_pre_compile.rpt"
 
@@ -110,6 +161,9 @@ set verilogout_no_tri true
 set_fix_multiple_port_nets -all -buffer_constants
 uniquify
 compile_ultra
+
+# report DesignWare / resource usage
+report_resources > "$REPORT_DIR/designware_post_compile.rpt"
 
 # ------------------------------------------------------------
 # Reports

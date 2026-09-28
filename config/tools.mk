@@ -74,7 +74,7 @@ STA_TIMING_LIB ?= $(LIB_LIB_SS)
 # ============================================================
 
 # ---- Design Compiler：单 corner 综合（slow）----------------
-DC_TARGET_LIB ?= $(LIB_DB_SS)
+DC_TARGET_LIB ?= $(LIB_DB_FF)
 
 # ---- PrimeTime：setup 用 SS / hold 用 FF -------------------
 PT_TARGET_LIB ?= $(DC_TARGET_LIB)
@@ -87,3 +87,14 @@ TEMPUS_HOLD_LIB  ?= $(LIB_LIB_FF)
 
 # ---- Formality：与 DC 一致 ---------------------------------
 FORMAL_TARGET_LIB ?= $(DC_TARGET_LIB)
+
+# ============================================================
+# DesignWare configuration
+# ============================================================
+
+DC_ROOT ?= /NAS/cad/synopsys/syn/Q-2019.12-SP5-5
+
+DW_ROOT          ?= $(DC_ROOT)/dw
+DW_SIM_DIR       ?= $(DW_ROOT)/sim_ver
+DW_SYN_LIB_DIR   ?= $(DC_ROOT)/libraries/syn
+DW_SYNTHETIC_LIB ?= dw_foundation.sldb

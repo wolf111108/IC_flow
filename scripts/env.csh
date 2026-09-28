@@ -131,28 +131,6 @@ module load $TEMPUS_MODULE
 endif
 
 # ------------------------------------------------------------
-# PrimeTime PTS M-2016 compatibility libraries
-# ------------------------------------------------------------
-
-if ("`make -s print-PT_MODULE`" == "synopsys/pts/M-2016.12-SP2") then
-    setenv PTS_ROOT /NAS/cad/synopsys/pts/M-2016.12-SP2
-
-    if (-d "$HOME/compat_lib") then
-        if ($?LD_LIBRARY_PATH) then
-            setenv LD_LIBRARY_PATH "$HOME/compat_lib:${PTS_ROOT}/linux64/pt/shlib:${PTS_ROOT}/linux64/syn/bin:${LD_LIBRARY_PATH}"
-        else
-            setenv LD_LIBRARY_PATH "$HOME/compat_lib:${PTS_ROOT}/linux64/pt/shlib:${PTS_ROOT}/linux64/syn/bin"
-        endif
-    else
-        if ($?LD_LIBRARY_PATH) then
-            setenv LD_LIBRARY_PATH "${PTS_ROOT}/linux64/pt/shlib:${PTS_ROOT}/linux64/syn/bin:${LD_LIBRARY_PATH}"
-        else
-            setenv LD_LIBRARY_PATH "${PTS_ROOT}/linux64/pt/shlib:${PTS_ROOT}/linux64/syn/bin"
-        endif
-    endif
-endif
-
-# ------------------------------------------------------------
 
 # Tool commands
 

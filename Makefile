@@ -105,11 +105,24 @@ FM_TCL := $(LEC_DIR)/scripts/run_formality.tcl
 PT_TCL := $(STA_DIR)/scripts/run_pt.tcl
 
 # ============================================================
+# Optional DesignWare simulation models
+# ============================================================
+
+DW_SIM_OPTS :=
+
+ifeq ($(USE_DW),1)
+DW_SIM_OPTS := \
+	-y $(DW_SIM_DIR) \
+	+libext+.v+.sv+.inc \
+	+incdir+$(DW_SIM_DIR)
+endif
+
+# ============================================================
 # Xcelium command templates
 # Keep these as single-line variables to avoid Makefile "\" continuation errors.
 # ============================================================
 
-RTL_XRUN_CMD     := $(XRUN) $(XRUN_COMMON_OPTS) $(RTL_DEFINES) -xmlibdirname $(DV_WORK_DIR)/xcelium_rtl.d -f $(DV_DIR)/filelists/tb.f -top $(TB_TOP) -l $(RTL_LOG)
+RTL_XRUN_CMD     := $(XRUN) $(XRUN_COMMON_OPTS) $(RTL_DEFINES) $(DW_SIM_OPTS) -xmlibdirname $(DV_WORK_DIR)/xcelium_rtl.d -f $(DV_DIR)/filelists/tb.f -top $(TB_TOP) -l $(RTL_LOG)
 GLS_XRUN_CMD     := $(XRUN) $(XRUN_COMMON_OPTS) $(GLS_DEFINES) -xmlibdirname $(GLS_WORK_DIR)/xcelium_gls.d -f $(DV_DIR)/filelists/gate.f -top $(TB_TOP) -l $(GLS_LOG)
 GLS_SDF_XRUN_CMD := $(XRUN) $(XRUN_COMMON_OPTS) $(GLS_SDF_DEFINES) +SDF_FILE=$(SYN_SDF) +SDF_LOG=$(PROJECT_ROOT)/$(GLS_LOG_DIR)/sdf_annotate.log -xmlibdirname $(GLS_WORK_DIR)/xcelium_sdf.d -f $(DV_DIR)/filelists/gate.f -top $(TB_TOP) -l $(GLS_SDF_LOG)
 # ============================================================
@@ -142,6 +155,7 @@ REGRESS_WAVE_DIR := $(REGRESS_DIR)/waves
 .PHONY: gen_gate_f
 .PHONY: lec lec_fm check_lec clean_lec
 .PHONY: sta sta_pt check_sta clean_sta
+.PHONY: check_dw
 
 # ============================================================
 # Help
@@ -208,10 +222,34 @@ check_fe: check_rtl check_lint check_cdc check_rdc check_syn check_lec check_sta
 	@echo "Frontend flow check finished."
 
 # ============================================================
+# DW check
+# ============================================================
+
+check_dw:
+	@echo "Checking DesignWare configuration..."
+	@echo "USE_DW           = $(USE_DW)"
+	@echo "DC_ROOT          = $(DC_ROOT)"
+	@echo "DW_ROOT          = $(DW_ROOT)"
+	@echo "DW_SIM_DIR       = $(DW_SIM_DIR)"
+	@echo "DW_SYN_LIB_DIR   = $(DW_SYN_LIB_DIR)"
+	@echo "DW_SYNTHETIC_LIB = $(DW_SYNTHETIC_LIB)"
+	@if [ "$(USE_DW)" = "1" ]; then \
+		test -d "$(DW_SIM_DIR)" || { \
+			echo "[ERROR] DW simulation directory not found: $(DW_SIM_DIR)"; \
+			exit 1; \
+		}; \
+		test -f "$(DW_SYN_LIB_DIR)/$(DW_SYNTHETIC_LIB)" || { \
+			echo "[ERROR] DW synthetic library not found: $(DW_SYN_LIB_DIR)/$(DW_SYNTHETIC_LIB)"; \
+			exit 1; \
+		}; \
+	fi
+	@echo "DesignWare configuration PASS"
+
+# ============================================================
 # RTL simulation
 # ============================================================
 
-rtl: rtl_sim check_rtl
+rtl: check_dw rtl_sim check_rtl
 
 rtl_sim:
 	@mkdir -p $(DV_LOG_DIR) $(DV_WORK_DIR)
@@ -352,15 +390,23 @@ clean_rdc:
 # Design Compiler synthesis
 # ============================================================
 
-syn: check_pdk syn_run check_syn
+syn: check_dw check_pdk syn_run check_syn
 
 syn_run:
 	@mkdir -p $(SYN_WORK_DIR) $(SYN_LOG_DIR) $(SYN_RPT_DIR) $(SYN_NETLIST_DIR)
 	@echo "Running Design Compiler synthesis..."
-	@cd $(SYN_WORK_DIR) && PROJECT_ROOT="$(PROJECT_ROOT)" TOP_DESIGN="$(TOP_DESIGN)" \
-	   RTL_LIST="$(RTL_LIST)" DC_TARGET_LIB="$(DC_TARGET_LIB)" \
-	   SDC_FILE="$(PROJECT_ROOT)/constraints/top.sdc" \
-	   $(DC_SHELL) -64bit -f $(PROJECT_ROOT)/$(SYN_TCL) 2>&1 | tee ../logs/syn.log
+	@cd $(SYN_WORK_DIR) && \
+	PROJECT_ROOT="$(PROJECT_ROOT)" \
+	TOP_DESIGN="$(TOP_DESIGN)" \
+	RTL_LIST="$(RTL_LIST)" \
+	DC_TARGET_LIB="$(DC_TARGET_LIB)" \
+	SDC_FILE="$(SDC_FILE)" \
+	USE_DW="$(USE_DW)" \
+	DW_ROOT="$(DW_ROOT)" \
+	DW_SYN_LIB_DIR="$(DW_SYN_LIB_DIR)" \
+	DW_SYNTHETIC_LIB="$(DW_SYNTHETIC_LIB)" \
+	$(DC_SHELL) -64bit -f $(PROJECT_ROOT)/$(SYN_TCL) \
+	2>&1 | tee ../logs/syn.log
 
 check_syn:
 	@echo "Checking synthesis result..."
@@ -425,7 +471,7 @@ sta_pt:
 	SYN_NETLIST="$(SYN_NETLIST)" \
 	SYN_SDC="$(SYN_SDC)" \
 	PT_TARGET_LIB="$(PT_TARGET_LIB)" \
-	LD_LIBRARY_PATH="$$HOME/lib_compat:$$LD_LIBRARY_PATH" \
+	LD_LIBRARY_PATH="$$HOME/compat_lib:$$LD_LIBRARY_PATH" \
 	$(PT_SHELL) -f ../../$(PT_TCL) \
 	2>&1 | tee ../../$(STA_LOG)
 
@@ -555,7 +601,7 @@ gen_gate_f:
 	@mkdir -p $(dir $(GATE_LIST))
 	@echo "-v $(STD_CELL_VERILOG)" > $(GATE_LIST)
 	@echo "$(SYN_NETLIST)" >> $(GATE_LIST)
-	@echo "$(PROJECT_ROOT)/dv/tb/$(TB_TOP).v" >> $(GATE_LIST)
+	@echo "$(TB_FILE)" >> $(GATE_LIST)
 
 # ============================================================
 # Clean

@@ -1,14 +1,21 @@
 # ============================================================
-# Project configuration
+# Design selection
 # ============================================================
 
-TOP_DESIGN := bit_serial_mac_unsigned
-TB_TOP     := tb_bit_serial_mac
+DESIGN ?= dw_fp_mac
 
-RTL_LIST  := $(PROJECT_ROOT)/dv/filelists/rtl.f
-TB_LIST   := $(PROJECT_ROOT)/dv/filelists/tb.f
-GATE_LIST := $(PROJECT_ROOT)/dv/filelists/gate.f
+DESIGN_CONFIG := $(PROJECT_ROOT)/config/designs/$(DESIGN).mk
 
-SYN_NETLIST := $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.v
-SYN_SDC     := $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.sdc
-SYN_SDF     := $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.sdf
+ifeq ($(wildcard $(DESIGN_CONFIG)),)
+$(error Design configuration not found: $(DESIGN_CONFIG))
+endif
+
+include $(DESIGN_CONFIG)
+
+# ============================================================
+# Common generated files
+# ============================================================
+
+SYN_NETLIST = $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.v
+SYN_SDC     = $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.sdc
+SYN_SDF     = $(PROJECT_ROOT)/syn/netlist/$(TOP_DESIGN)_syn.sdf

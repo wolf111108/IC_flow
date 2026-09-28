@@ -108,11 +108,9 @@ PT_TARGET_LIB := $(DC_TARGET_LIB)
 FORMAL_TARGET_LIB := $(DC_TARGET_LIB)
 ```
 
-PrimeTime PTS M-2016.12-SP2 需要额外动态库路径。项目已在 `scripts/env.csh` 中固化：
-
-```csh
-setenv LD_LIBRARY_PATH "$HOME/compat_lib:${PTS_ROOT}/linux64/pt/shlib:${PTS_ROOT}/linux64/syn/bin:${LD_LIBRARY_PATH}"
-```
+PrimeTime PTS M-2016.12-SP2 需要额外动态库路径。`make sta` 执行时，
+Makefile 会自动把 `$HOME/compat_lib` 加到 `LD_LIBRARY_PATH` 最前面。
+module load 则负责注入 PTS 自带的库路径。
 
 如果机器上缺少 `libmng.so.1`，需要预先创建兼容目录，例如：
 
@@ -897,10 +895,11 @@ pt_shell 启动时报 libmng.so.1 或 libnffr/libnffw/libnsys 找不到。
 解决：
 
 ```text
-使用 synopsys/pts/M-2016.12-SP2，并在 env.csh 中追加：
-$HOME/compat_lib
-$PTS_ROOT/linux64/pt/shlib
-$PTS_ROOT/linux64/syn/bin
+使用 synopsys/pts/M-2016.12-SP2。
+make sta 已在 Makefile 中自动设置：
+LD_LIBRARY_PATH="$HOME/compat_lib:$LD_LIBRARY_PATH" pt_shell ...
+module load 负责注入 PTS 自带的 linux64/pt/shlib 和 linux64/syn/bin。
+用户只需预先创建 compat_lib 目录并放入缺失的 .so 软链接即可（见第 3 节）。
 ```
 
 ---
